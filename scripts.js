@@ -20,16 +20,16 @@ const nodes = {
     },
     points: [
       {
-        coordinates: [0.42371362247138644, 0.4646271510516252],
+        coordinates: [0.423713, 0.464627],
         size: 5,
         target: "dog",
       }, {
-        coordinates: [0.494841942046911, 0.5659655831739961],
-        size: 5,
+        coordinates: [0.494841, 0.565965],
+        size: 4,
         target: "fish",
       }, {
-        coordinates: [0.5648230306615399, 0.4646271510516252],
-        size: 6,
+        coordinates: [0.564823, 0.464627],
+        size: 5,
         target: "elefant",
       }
     ]
@@ -50,15 +50,15 @@ const nodes = {
     gain: 0,
     points: [
       {
-        coordinates: [0.5371100150406265, 0.1931166347992352],
+        coordinates: [0.537110, 0.193116],
         size: 2,
         target: "cat",
       }, {
-        coordinates: [0.5467897925401853, 0.2887189292543021],
+        coordinates: [0.546789, 0.288718],
         size: 2,
         target: "fish",
       }, {
-        coordinates: [0.6016418650376856, 0.2237093690248566],
+        coordinates: [0.601641, 0.223709],
         size: 4,
         target: "elefant",
       }
@@ -80,15 +80,15 @@ const nodes = {
     gain: 0,
     points: [
       {
-        coordinates: [0.12549700930055666, 0.5334608030592735],
+        coordinates: [0.125497, 0.533460],
         size: 4.5,
         target: "dog",
       }, {
-        coordinates: [0.4319659094838018, 0.4397705544933078],
+        coordinates: [0.431965, 0.439770],
         size: 6,
         target: "cat",
       }, {
-        coordinates: [0.43639145316875844, 0.864244741873805],
+        coordinates: [0.436391, 0.864244],
         size: 8,
         target: "elefant",
       }
@@ -110,15 +110,15 @@ const nodes = {
     gain: 0,
     points: [
       {
-        coordinates: [0.18698263753996952, 0.4416826003824092],
+        coordinates: [0.186982, 0.441682],
         size: 8,
         target: "dog",
       }, {
-        coordinates: [0.5870427121241142, 0.2702205882352941],
+        coordinates: [0.587042, 0.270220],
         size: 3,
         target: "fish",
       }, {
-        coordinates: [0.7964518024883205, 0.4340344168260038],
+        coordinates: [0.796451, 0.434034],
         size: 2,
         target: "cat",
       }
@@ -134,7 +134,7 @@ let currentNode = null;
 let fadeStartTime = Infinity;
 let currentSound = null;
 
-window.addEventListener('resize', fitToScreen);
+window.addEventListener('resize', fitNodesToScreen);
 window.addEventListener('keydown', onKeyDown, false);
 window.addEventListener('keyup', onKeyUp, false);
 pointContainer.addEventListener('click', onPointContainerClick);
@@ -184,12 +184,73 @@ async function initNodes() {
 function startAtFirstNode() {
   currentNode = nodes.cat;
   currentNode.image.element.style.opacity = 1;
-  fitToScreen();
+  fitNodesToScreen();
   displayPoints(currentNode);
 }
 
+// perfom cross-fade in animation loop
+function crossFadeImages() {
+  const now = 0.001 * performance.now();
+  const imageIn = currentNode.image;
+  const imageOut = lastNode.image;
+
+  const fadeTime = imageIn.fadeTime || defaultImageFadeTime;
+  const fadeInOpacity = Math.min(1, (now - fadeStartTime) / fadeTime);
+  const fadeOutOpacity = 1 - fadeInOpacity;
+
+  // set opacity (square looks better)
+  imageIn.element.style.opacity = fadeInOpacity * fadeInOpacity;
+  imageOut.element.style.opacity = fadeOutOpacity * fadeOutOpacity;
+
+  if (now >= fadeStartTime + fadeTime) {
+    // cross-fade completed
+    lastNode = null;
+    displayPoints(currentNode);
+  } else {
+    // still cross-fading
+    requestAnimationFrame(crossFadeImages);
+  }
+}
+
+function startSound(node) {
+  const time = audioContext.currentTime;
+
+  // fade current sound out and stop
+  if (currentSound !== null) {
+    currentSound.sourceNode.stop(time + currentSound.fadeOutTime);
+    currentSound.gainNode.gain.setValueAtTime(currentSound.gainFactor, time);
+    currentSound.gainNode.gain.linearRampToValueAtTime(0, time + currentSound.fadeOutTime);
+  }
+
+  const audio = node.audio;
+  const gainFactor = decibelToLinear(audio.gainInDb );
+  const fadeInTime = audio.fadeInTime || defaultAudioFadeTime;
+  let offset = node.sync ? (time - loopStartTime) % audio.buffer.duration : 0;
+
+  // create gain node (for fade-in and intensity)
+  const gain = audioContext.createGain();
+  gain.connect(audioContext.destination);
+  gain.gain.value = 0;
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(gainFactor, time + fadeInTime);
+
+  // create buffer source (for sound playback)
+  const source = audioContext.createBufferSource();
+  source.connect(gain);
+  source.buffer = audio.buffer;
+  source.loop = !!audio.loop;
+  source.start(time, offset);
+
+  currentSound = {
+    sourceNode: source,
+    gainNode: gain,
+    fadeOutTime: audio.fadeOutTime || defaultAudioFadeTime,
+    gainFactor: gainFactor,
+  };
+}
+
 // fit images of current and last node to screen
-function fitToScreen() {
+function fitNodesToScreen() {
   if (currentNode !== null) {
     fitImageToScreen(currentNode.image.element);
     fitPointContainerToNode(currentNode);
@@ -227,30 +288,6 @@ function fitPointContainerToNode(node) {
   pointContainer.style.zIndex = 1;
 }
 
-// perfom cross-fade in animation loop
-function crossFadeImages() {
-  const now = 0.001 * performance.now();
-  const imageIn = currentNode.image;
-  const imageOut = lastNode.image;
-
-  const fadeTime = imageIn.fadeTime || defaultImageFadeTime;
-  const fadeInOpacity = Math.min(1, (now - fadeStartTime) / fadeTime);
-  const fadeOutOpacity = 1 - fadeInOpacity;
-
-  // set opacity (square looks better)
-  imageIn.element.style.opacity = fadeInOpacity * fadeInOpacity;
-  imageOut.element.style.opacity = fadeOutOpacity * fadeOutOpacity;
-
-  if (now >= fadeStartTime + fadeTime) {
-    // cross-fade completed
-    lastNode = null;
-    displayPoints(currentNode);
-  } else {
-    // still cross-fading
-    requestAnimationFrame(crossFadeImages);
-  }
-}
-
 // display points of given node
 function displayPoints(node) {
   const points = node.points;
@@ -259,6 +296,7 @@ function displayPoints(node) {
     const rect = pointContainer.getBoundingClientRect();
     const size = 0.01 * rect.width * point.size;
     const div = document.createElement('div');
+
     div.classList.add('point');
     div.style.left = `${100 * point.coordinates[0]}%`;
     div.style.top = `${100 * point.coordinates[1]}%`;
@@ -269,6 +307,7 @@ function displayPoints(node) {
 
     div.dataset.target = point.target;
     div.addEventListener('click', onPointClick);
+
     pointContainer.appendChild(div);
   }
 }
@@ -276,6 +315,7 @@ function displayPoints(node) {
 // handle click on point (advance to target)
 function onPointClick(evt) {
   if (audioContext === null) {
+    // create audio context on first click
     audioContext = new AudioContext();
   }
 
@@ -292,7 +332,7 @@ function onPointClick(evt) {
     // assign node
     lastNode = currentNode;
     currentNode = targetNode;
-    fitToScreen();
+    fitNodesToScreen();
 
     // start cross-fade
     fadeStartTime = now;
@@ -303,11 +343,13 @@ function onPointClick(evt) {
   }
 }
 
-// handle click with shift on point container (post position)
+// handle click with shift on point container (post position into console)
 function onPointContainerClick(evt) {
   if (evt.shiftKey) {
     const rect = pointContainer.getBoundingClientRect();
-    console.log(`[${(evt.clientX - rect.left) / rect.width}, ${(evt.clientY - rect.top) / rect.height}]`);
+    const x = (evt.clientX - rect.left) / rect.width;
+    const y = (evt.clientY - rect.top) / rect.height;
+    console.log(`[${x.toFixed(6)}, ${y.toFixed(6)}]`);
   }
 }
 
@@ -331,41 +373,6 @@ function onKeyUp(evt) {
       point = point.nextSibling;
     }
   }
-}
-
-function startSound(node) {
-  const time = audioContext.currentTime;
-
-  // fade current sound out and stop
-  if (currentSound !== null) {
-    currentSound.sourceNode.stop(time + currentSound.fadeOutTime);
-    currentSound.gainNode.gain.setValueAtTime(currentSound.gainFactor, time);
-    currentSound.gainNode.gain.linearRampToValueAtTime(0, time + currentSound.fadeOutTime);
-  }
-
-  const audio = node.audio;
-  const gainFactor = decibelToLinear(audio.gainInDb );
-  const fadeInTime = audio.fadeInTime || defaultAudioFadeTime;
-  let offset = node.sync ? (time - loopStartTime) % audio.buffer.duration : 0;
-
-  const gain = audioContext.createGain();
-  gain.connect(audioContext.destination);
-  gain.gain.value = 0;
-  gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(gainFactor, time + fadeInTime);
-
-  const source = audioContext.createBufferSource();
-  source.connect(gain);
-  source.buffer = audio.buffer;
-  source.loop = !!audio.loop;
-  source.start(time, offset);
-
-  currentSound = {
-    sourceNode: source,
-    gainNode: gain,
-    fadeOutTime: audio.fadeOutTime || defaultAudioFadeTime,
-    gainFactor: gainFactor,
-  };
 }
 
 function decibelToLinear(val) {
