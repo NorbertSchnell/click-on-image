@@ -5,24 +5,25 @@ const defaultImageFadeTime = 2;
 const defaultAudioFadeTime = 0.1;
 
 const nodes = {
-  cat: {
-    image: {
-      fileName: "cat.png",
-      fadeTime: 2,
+  /////////////////////////////////////////////////////////////////
+  cat: { // node name
+    image: { // image parameters
+      fileName: "cat.png", // image file name
+      fadeTime: 2, // duration of fade from the last image to this one
     },
-    audio: {
-      fileName: "cat.wav",
-      gainInDb: 0,
-      loop: false,
-      sync: false,
-      fadeInTime: 0,
-      fadeOutTime: 0.1,
+    audio: { // audio parameters
+      fileName: "cat.wav", // sound file name
+      gainInDb: 0, // gain in dB
+      loop: false, // whether the sound is looped
+      sync: false, // whether the sound is started with an offset to allow sounds with the same duration to be in phase
+      fadeInTime: 0, // fade-in duration
+      fadeOutTime: 0.1, // fade-out duration
     },
-    points: [
+    points: [ // list of link points
       {
-        coordinates: [0.423713, 0.464627],
-        size: 5,
-        target: "dog",
+        coordinates: [0.423713, 0.464627], // x and y coordinates of the point
+        size: 5, // size (diameter) of the point
+        target: "dog", // target node
       }, {
         coordinates: [0.494841, 0.565965],
         size: 4,
@@ -34,6 +35,7 @@ const nodes = {
       }
     ]
   },
+  /////////////////////////////////////////////////////////////////
   dog: {
     image: {
       fileName: "dog.png",
@@ -55,15 +57,16 @@ const nodes = {
         target: "cat",
       }, {
         coordinates: [0.546789, 0.288718],
-        size: 2,
+        size: 3.5,
         target: "fish",
       }, {
         coordinates: [0.601641, 0.223709],
-        size: 4,
+        size: 2,
         target: "elefant",
       }
     ]
   },
+  /////////////////////////////////////////////////////////////////
   fish: {
     image: {
       fileName: "fish.png",
@@ -94,6 +97,7 @@ const nodes = {
       }
     ]
   },
+  /////////////////////////////////////////////////////////////////
   elefant: {
     image: {
       fileName: "elefant.png",
@@ -126,6 +130,7 @@ const nodes = {
   }
 };
 
+// constants and state variables
 const nodeKeys = Object.keys(nodes);
 const imageContainer = document.getElementById('image-container');
 const pointContainer = document.getElementById('point-container');
@@ -134,11 +139,13 @@ let currentNode = null;
 let fadeStartTime = Infinity;
 let currentSound = null;
 
+// register event listeners
 window.addEventListener('resize', fitNodesToScreen);
 window.addEventListener('keydown', onKeyDown, false);
 window.addEventListener('keyup', onKeyUp, false);
 pointContainer.addEventListener('click', onPointContainerClick);
 
+// load images and sounds
 let numItemsToLoad = 2 * nodeKeys.length;
 initNodes();
 
@@ -146,15 +153,15 @@ initNodes();
 async function initNodes() {
   for (let key in nodes) {
     const node = nodes[key];
-    const image = new Image();
+    const img = new Image();
 
     // add image to node
-    node.image.element = image;
+    node.image.element = img;
 
     // when image is loaded
-    image.addEventListener('load', () => {
+    img.addEventListener('load', () => {
       // insert image into container
-      imageContainer.appendChild(image);
+      imageContainer.appendChild(img);
 
       // start when everything is loaded
       if (--numItemsToLoad == 0) {
@@ -163,7 +170,7 @@ async function initNodes() {
     });
 
     // assign and load image file
-    image.src = `images/${node.image.fileName}`;
+    img.src = `images/${node.image.fileName}`;
 
     // load audio file
     const audioContext = new AudioContext();
@@ -171,7 +178,7 @@ async function initNodes() {
       .then(data => data.arrayBuffer())
       .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
       .then(decodedAudio => {
-        // 
+        // assign loaded audio buffer
         node.audio.buffer = decodedAudio;
         if (--numItemsToLoad == 0) {
           startAtFirstNode();
@@ -182,7 +189,8 @@ async function initNodes() {
 
 // start from the beginning
 function startAtFirstNode() {
-  currentNode = nodes.cat;
+  const keyOfFirstNode = nodeKeys[0];
+  currentNode = nodes[keyOfFirstNode];
   currentNode.image.element.style.opacity = 1;
   fitNodesToScreen();
   displayPoints(currentNode);
@@ -312,7 +320,7 @@ function displayPoints(node) {
   }
 }
 
-// handle click on point (advance to target)
+// handle click on link point --> advance to target
 function onPointClick(evt) {
   if (audioContext === null) {
     // create audio context on first click
@@ -343,7 +351,7 @@ function onPointClick(evt) {
   }
 }
 
-// handle click with shift on point container (post position into console)
+// handle click with shift on point container --> post position to console
 function onPointContainerClick(evt) {
   if (evt.shiftKey) {
     const rect = pointContainer.getBoundingClientRect();
